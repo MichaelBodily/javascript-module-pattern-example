@@ -1,0 +1,1415 @@
+﻿@using OnlineBanking2.AppCode
+@using OnlineBanking2.Models.AccountOpening;
+@using Psi.Data.Models.Domain;
+@model AccountOpeningViewModel
+
+@{
+    Layout = "~/Views/_MainLayout.vbhtml";
+    ViewBag.Title = "Account Opening";
+}
+
+@section LinkedStyleSheets {
+    <link href="~/Assets/css/page-specific/account-opening/account-opening.css" rel="stylesheet" />
+}
+
+<div class="panel panel-default panel-main">
+    <header class="panel-heading">
+        <span role="heading">@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "PanelTitle")</span> <!-- Account Opening -->
+    </header>
+
+    <div class="panel-body account-opening">
+        <!-- spinner -->
+        <div id="AccountOpeningSpinnerDiv" style="display:none; text-align:center; margin-bottom: 1rem;">
+            <img src="@Url.Content(MvcHelpers.GetClientImage("ajax_loader.gif"))" alt="Calculating…" />
+        </div>
+
+        <!-- error -->
+        <div id="AccountOpeningErrorDiv" style="display:none;" tabIndex="0">
+            <div class="alert alert-danger">
+                <span>@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ErrorNotification")</span> <!-- Sorry, an error has occurred. -->
+            </div>
+        </div>
+
+        <!-- STEP ONE -->
+        <!-- main content -->
+        <form id="AccountOpeningForm" aria-live="assertive">
+            @Html.AntiForgeryToken()
+
+            <div id="MainAccountButtonContainerDiv">
+                <div class="flex-container space-below-md">
+                    @ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "IntroductoryInstructionsText") <!-- Please select the type of account you wish to open. -->
+                </div>
+
+                <!-- ACCOUNT CATEGORIES -->
+                <div class="flex-container">
+                    @if (Model.AccountCategories != null && Model.AccountCategories.Count > 0)
+                    {
+                        var itemCounter = 1;
+                        var categoryCounter = 1;
+
+                        foreach (var acct in Model.AccountCategories)
+                        {
+                            if (itemCounter == 1)
+                            {
+                                @:<div class="flex-container">
+                                }
+
+                                <div Class="sub-div div_@(itemCounter)_of_3">
+                                    <div id="@(acct)TileButton" class="account-tile" data-id="@acct" role="button">@acct</div>
+                                </div>
+
+                                if (itemCounter == Model.ProductColumnNumber || categoryCounter == Model.AccountCategories.Count)
+                                {
+                                @:</div>
+                            }
+
+                            itemCounter += 1;
+                            if (itemCounter > Model.ProductColumnNumber) { itemCounter = 1; }
+                            categoryCounter += 1;
+                        }
+                    }
+                    else
+                    {
+                        <div>
+                            @ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NoAccountsLabel") <!-- There are no accounts to show. -->
+                        </div>
+                    }
+                </div>
+
+                <!-- PRODUCTS -->
+                @if (Model.AllProducts != null && Model.AllProducts.Any())
+                {
+                    foreach (var product in Model.AllProducts)
+                    {
+                        <div id="@(product.Name)AccountTypesButtonContainerDiv" class="narrow product-item" style="display:none;">
+                            @if (product.ProductsList != null && product.ProductsList.Count > 0)
+                            {
+                                var itemCounter = 1;
+                                var accountCounter = 1;
+
+                                <hr class="hr-narrow" />
+
+                                foreach (var acct in product.ProductsList)
+                                {
+                                    if (itemCounter == 1)
+                                    {
+                                        @:<div class="flex-container">
+                                        }
+                                        <div class="sub-div div_@(itemCounter)_of_3">
+                                            <div class="account-type-tile" role="button" data-id="@acct.Id" data-name="@acct.Name" data-min="@acct.MinimumFundingAmount" data-max="@acct.MaximumFundingAmount" data-type="@acct.Type">
+                                                <div class="bold">@acct.Name</div>
+                                                <div class="small">@acct.Description</div>
+                                                <div class="small">
+                                                    @if (acct.MinimumFundingAmount != null && acct.MinimumFundingAmount > new Money(0))
+                                                    {
+                                                        @ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "MinimumDepositLabel") @:$@(acct.MinimumFundingAmount.ToDollarString())
+                                                    }
+                                                </div>
+                                                <div class="small">
+                                                    @if (acct.MaximumFundingAmount != null && acct.MaximumFundingAmount > new Money(0))
+                                                    {
+                                                        @ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "MaximumDepositLabel") @:$@(acct.MaximumFundingAmount.ToDollarString())
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                        if (itemCounter == Model.ProductColumnNumber || accountCounter == product.ProductsList.Count)
+                                        {
+                                        @:</div>
+                                    }
+
+                                    itemCounter += 1;
+                                    if (itemCounter > Model.ProductColumnNumber) { itemCounter = 1; }
+                                    accountCounter += 1;
+                                }
+
+                                <!-- NEXT BUTTON ROW -->
+                                <div class="text-right space-above-sm">
+                                    <span class="account-spinner-img-span" style="display:none; margin-right:1rem;">
+                                        <img src="@Url.Content(MvcHelpers.GetClientImage("ajax_loader.gif"))" alt="Processing…" />
+                                    </span>
+
+                                    <button id="@(product.Name)TypeNextButton" class="btn btn-primary account-next-button" disabled>@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NextButtonLabel")</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <hr class="hr-narrow" />
+
+                                <div>
+                                    @ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NoAccountsLabel") <!-- There are no accounts to show. -->
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </form>
+
+        <!-- STEP TWO -->
+        <!-- JOINT OWNERS LIST SECTION-->
+        <div id="JointOwnersSectionDiv" style="display:none">
+            @{Html.RenderAction("JointOwnersListControl");}
+        </div>
+
+        <!-- STEP TWO INTERRUPT -->
+        <!-- ADD NEW JOINT OWNER FORM -->
+        <div id="AddNewJointOwnersSectionDiv" style="display:none">
+            @{Html.RenderAction("AddNewJointOwnerControl");}
+        </div>
+
+        <!-- STEP THREE -->
+        <!-- DISCLOSURE ACCEPTANCE -->
+        <div id="DisclosureAcceptanceSectionDiv" style="display:none">
+            @{Html.RenderAction("DisclosureAcceptanceControl");}
+        </div>
+
+        <!-- STEP FOUR -->
+        <!-- FUNDING ACCOUNT -->
+        <div id="FundingAccountSectionDiv" style="display:none">
+            @{Html.RenderAction("FundingAccountControl");}
+        </div>
+
+        <!-- STEP FIVE -->
+        <!-- REVIEW -->
+        <div id="ReviewSectionDiv" style="display:none">
+            @{Html.RenderAction("ReviewControl");}
+        </div>
+
+        <!-- MODALS -->
+        <!-- NO DEBIT CARDS MODAL -->
+        <div id="NoDebitCardsWarningModal" class="modal fade" data-backdrop="static">
+            <div class="modal-dialog">
+                @Html.Partial("_ModalNoDebitCardsSelected", Model)
+            </div>
+        </div>
+
+        <!-- ADD NEW JOINT OWNER MODAL -->
+        <div id="AddNewJointOwnerDisclosureModal" class="modal fade" data-backdrop="static">
+            <div class="modal-dialog large">
+                @Html.Partial("_ModalAddNewJointOwnerDisclosure")
+            </div>
+        </div>
+
+        <!-- NEW JOINT OWNER IS NOT A MEMBER OF THIS CREDIT UNION WARNING MODAL -->
+        <div id="NewJointOwnerNotMemberWarningModal" class="modal fade" data-backdrop="static">
+            <div class="modal-dialog">
+                @Html.Partial("_ModalNewJointOwnerNotMemberWarning")
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Javascript {
+    <script>
+        // generic event handlers
+        $(".account-tile").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.showProductAccountOptions(e);
+        });
+
+        $(".account-type-tile").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.selectAccountTypeTile(e);
+        });
+
+        $(".account-next-button").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.setAccountType(e);
+        });
+
+        // click handler for Back button that lives on _JoinOwnersListControl.cshtml
+        $("#JointOwnersListBackButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.showAccountSelectionSection();
+        });
+
+        // click handler for Next button that lives on _JoinOwnersListControl.cshtml
+        $("#JointOwnersListNextButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.setJointOwners(e);
+        });
+
+        // click handler for 'Add a Joint Owner' button that lives on _JoinOwnersListControl.cshtml
+        $("#AddNewJointOwnerButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.showAddNewJointOwnerSection();
+        });
+
+        // click handler for Back button that lives on _AddNewJoinOwnerControl.cshtml
+        $("#AddNewJointOwnerCancelButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.slideOpenJointOwnersSection();
+        });
+
+        // click handler for Next button that lives on _AddNewJoinOwnerControl.cshtml
+        $("#AddNewJointOwnerSubmitButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.validateAddJointOwnerForm();
+        });
+
+        // change handler for file upload input
+        $(".file-upload").bind('change', function () {
+            AccountOpeningJointOwnerModule.checkFileUpload.call(this);
+        });
+
+        // click handler for the clear button that lives on _AddNewJointOwnerControl.cshtml
+        $("#AddNewJointOwnerClearButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.resetAddJointOwnerForm();
+        });
+
+        // click handler for the back button that lives on _DisclosureAcceptanceContol.cshtml
+        $("#DisclosureAcceptanceBackButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.returnToJointOwnersSection("left");
+        });
+
+        // change handler for the disclosure acceptance checkbox that lives on _DisclosureAcceptanceControl.cshtml
+        $("#AcknowledgeCheckbox").change(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.toggleAcknowledgeChecked(e.currentTarget);
+        });
+
+        // click handler for the next button that lives on _DisclosureAcceptanceContol.cshtml
+        $("#DisclosureAcceptanceNextButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.showFundingAccountSection();
+        });
+
+        // click handler for the back button that lives on _FundingAccountContol.cshtml
+        $("#FundingAccountBackButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.returnToDisclosureSection();
+        });
+
+        // click handler for the next button that lives on _FundingAccountContol.cshtml
+        $("#FundingAccountNextButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.validateFundingAccountForm();
+        });
+
+        // click handler for the back button that lives on _ReviewContol.cshtml
+        $("#ReviewBackButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.returnToFundingAccountSection();
+        });
+
+        // click handler for the next button that lives on _ReviewContol.cshtml
+        $("#ReviewSubmitButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.openAccount();
+        });
+
+        // keypress handler for FundingAmountTextBox that lives on _FundingAccountControl.cshtm
+        $("#FundingAmountTextBox").keypress(function (e) {
+            return AccountOpeningJointOwnerModule.ensureEntryIsOnlyNumerals(e);
+        });
+
+        // click handler for the ok button that lives on _ModalNoDebitCardsSelected.cshtml
+        $("#NoDebitCardsConfirmButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.allowNoDebitCards();
+        })
+
+        // click handler for the ok button that lives on _ModalAddNewJointOwnerDisclosure.cshtml
+        $("#AddJointOwnerDisclosureConfirmButton").click(function (e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.acknowledgeAddNewJointOwnerDisclosure();
+        })
+
+        // click handler for the cancel button that lives on _ModalAddNewJointOwnerDisclosure.cshtml
+        $("#AddJointOwnerDisclosureCancelButton").click(function (e) {
+            e.preventDefault();
+            $("#AddNewJointOwnerSubmitButton").prop("disabled", false);
+        })
+
+        // click handler for the 'proceed' button that lives on _ModalNewJointOwnerNotMemberWarning.cshtml
+        $("#JointOwnerNotMemberWarningProceedButton").click(function(e) {
+            e.preventDefault();
+            AccountOpeningJointOwnerModule.proceedFromJointOwnerNotMemberWarning();
+        })
+
+        // Datepicker for Date of Birth on _AddNewJoinOwnerControl.cshtml
+        $("#DateOfBirthTextbox").datepicker({
+            autoSize: true,
+            dateFormat: "M d, yy",
+            maxDate: "+0d", // today
+            minDate: "-36500d", // 100 years ago
+            onSelect: function () { } /* workaround for IE validator bug */
+        });
+
+        // Datepicker for IdIssueDateTextbox & IdExpireDateTextbox on _AddNewJoinOwnerControl.cshtml
+        $("#IdIssueDateTextbox, #IdExpireDateTextbox").datepicker({
+            autoSize: true,
+            dateFormat: "M d, yy",
+            maxDate: "+0d", // today
+            minDate: "-36500d", // 100 years ago
+            onSelect: function () { } /* workaround for IE validator bug */
+        });
+
+        // event handler to toggle Social Security number field from 'text' to 'password' and back again:
+        $("#viewSocialSecurityEyeSpan").click(function () {
+            if ($("#SocialSecurityNumberTextbox").attr("type").toLowerCase() === "password") {
+                $("#SocialSecurityNumberTextbox").attr("type", "text");
+                document.querySelector("#viewSocialSecurityEyeSpan").style.backgroundColor = "#F7F7F7";
+            } else if ($("#SocialSecurityNumberTextbox").attr("type").toLowerCase() === "text") {
+                $("#SocialSecurityNumberTextbox").attr("type", "password");
+                document.querySelector("#viewSocialSecurityEyeSpan").style.backgroundColor = "#EEEEEE";
+            }
+        });
+
+        // event handler to toggle Id number field from 'text' to 'password' and back again:
+        $("#viewIdNumberEyeSpan").click(function () {
+            if ($("#IdNumberTextbox").attr("type").toLowerCase() === "password") {
+                $("#IdNumberTextbox").attr("type", "text");
+                document.querySelector("#viewIdNumberEyeSpan").style.backgroundColor = "#F7F7F7";
+            } else if ($("#IdNumberTextbox").attr("type").toLowerCase() === "text") {
+                $("#IdNumberTextbox").attr("type", "password");
+                document.querySelector("#viewIdNumberEyeSpan").style.backgroundColor = "#EEEEEE";
+            }
+        });
+
+        // Namespace
+        HomeBanking.namespace("AccountOpeningJointOwnerModule");
+
+        AccountOpeningJointOwnerModule = (function () {
+            // local vars:
+            var $q = document.querySelector.bind(document);
+            var _selectedAccount;
+            var _selectedAccountType = {};
+            var _sliderTimer = 500;
+            var _allowAddJointOwners = ('@Model.AllowAddJointOwnersToNewAccount.ToString().ToLower()' === 'true');
+            var _jointOwnersList = [];
+            var _allowNewAccountFunding = ('@Model.AllowNewAccountFunding.ToString().ToLower()' === 'true');
+            var _warnUserIfNoDebitCardSelected = ('@Model.ShouldWarnUserIfNoDebitCardSelected.ToString().ToLower()' === 'true');
+            var _noDebitCardsOk = !_warnUserIfNoDebitCardSelected;
+            var _userIsMinor = ('@Model.IsMinor.ToString().ToLower()' === 'true');
+            var _allowPromoCode = ('@Model.AllowPromoCode.ToString().ToLower()' === 'true');
+            var _forceNewAccountOpeningDisclosure = ('@Model.ForceNewAccountOpeningDisclosure.ToString().ToLower()' === 'true');
+            var _forceAddNewJointOwnerDisclosure = ('@Model.ForceAddNewJointOwnerDisclosure.ToString().ToLower()' === 'true');
+            var _addJointOwnerDisclosureAccepted = false;
+            var _requireIdInfoOnAddJointOwner = ('@Model.RequireIdInfoOnAddJointOwner.ToString().ToLower()' === 'true');
+            var _requireEmployerInfoOnAddJointOwner = ('@Model.RequireEmployerInfoOnAddJointOwner.ToString().ToLower()' === 'true');
+
+            // local methods:
+            // WIZARD STEP ONE:
+            // select the product category and show it's account types
+            var _showProductAccountOptions = function (e) {
+                AccountOpeningJointOwnerModule.removeSelectedAccountTileStyle();
+                e.currentTarget.classList.add("selected");
+                $(".product-item").hide();
+                $("#" + e.currentTarget.dataset.id + "AccountTypesButtonContainerDiv").slideDown();
+                _selectedAccount = e.currentTarget.dataset.id;
+            };
+
+            // select Account Type, highlight it and enable the 'next' button in the wizard
+            var _selectAccountTypeTile = function (e) {
+                AccountOpeningJointOwnerModule.removeSelectedAccountTypeTileStyle();
+                e.currentTarget.classList.add("selected");
+
+                // Note: setting hasdebitcard to false initially. tripped in _setAccountType() method below:
+                _selectedAccountType = { id: e.currentTarget.dataset.id, name: e.currentTarget.dataset.name, hasdebitcard: false, min: e.currentTarget.dataset.min, max: e.currentTarget.dataset.max, type: e.currentTarget.dataset.type };
+                $q("#" + _selectedAccount + "TypeNextButton").disabled = false; 
+            };
+
+            // deselect all account tiles
+            var _removeSelectedAccountTileStyle = function () {
+                var tiles = document.querySelectorAll(".account-tile");
+
+                for (var i = 0; i < tiles.length; ++i) {
+                    tiles[i].classList.remove("selected");
+                }
+
+                $(".account-next-button").prop('disabled', true);
+                AccountOpeningJointOwnerModule.removeSelectedAccountTypeTileStyle();
+                _selectedAccountType = null;
+            };
+
+            // deselect all account type tiles
+            var _removeSelectedAccountTypeTileStyle = function () {
+                var tiles = document.querySelectorAll(".account-type-tile");
+
+                for (var i = 0; i < tiles.length; ++i) {
+                    tiles[i].classList.remove("selected");
+                }
+            };
+
+            // set account type
+            var _setAccountType = function (e) {
+                var inDelay = setTimeout(function () { $(".account-spinner-img-span").slideDown(); }, 300);             
+                $(".account-next-button").prop("disabled", true);
+                $(".account-next-button").prop("value", "@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ProcessingButtonLabel")");
+
+                // buid up the form data. Model Signature: OnlineBanking2.Models.AccountOpening.NewAccountSubmitModel.cs
+                var postData = {
+                    NewAccountId: _selectedAccountType.id,
+                    NewAccountName: _selectedAccountType.name,
+                    Type: _selectedAccountType.type,
+                    MinimumBalance: _selectedAccountType.min
+                };
+
+                // send accounts to the controller
+                $.ajax({
+                    url: '@Url.Action("SetAccountType", "AccountOpening")', // action, controller
+                    dataType: "text",
+                    type: "Post",
+                    data: _addAntiForgeryToken(postData),
+                    success: function (data) {
+                        AccountOpeningJointOwnerModule.showJointOwnersSection("right");
+                        clearTimeout(inDelay);
+                        $(".account-spinner-img-span").slideUp();
+                        $(".account-next-button").prop("disabled", false);
+                        $(".account-next-button").prop("value", "@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NextButtonLabel")");
+                        // Set the 'hasdebitcard' attribute for the selected product. This will determine if we show checkboxes for joint owners later:
+                        _selectedAccountType.hasdebitcard = data.IsDebitCardAvailable;
+                    },
+                    error: function (xhr, err) {
+                        var terseError = xhr.statusText;
+                        console.log("terseError: ", terseError);
+                        console.log("Request Failed: " + err);
+
+                        clearTimeout(inDelay);
+                        $("#AccountOpeningErrorDiv").slideDown();
+                        $(".account-spinner-img-span").slideUp();
+                        $(".account-next-button").prop("disabled", false);
+                        $(".account-next-button").prop("value", "@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NextButtonLabel")");
+                    }
+                });
+            };
+
+
+
+            // WIZARD STEP TWO - ADD JOINT ACCOUNTS:
+            // show the Account Selection Section of the wizard in the view. probably from a 'back' button click
+            var _showAccountSelectionSection = function () {
+                $q("#JointOwnersSectionDiv").style.display = "none";
+                $q("#AddNewJointOwnersSectionDiv").style.display = "none";
+                $q("#DisclosureAcceptanceSectionDiv").style.display = "none";
+                $("#MainAccountButtonContainerDiv").show("slide", { direction: "left" }, _sliderTimer);
+            };
+
+            // show the Joint Owners Section of the wizard in the view
+            var _showJointOwnersSection = function (direction) {
+                if (!_allowAddJointOwners) {
+                    AccountOpeningJointOwnerModule.showDisclosureSection();
+                    return;
+                }
+
+                $q("#MainAccountButtonContainerDiv").style.display = "none";
+                $q("#AddNewJointOwnersSectionDiv").style.display = "none";
+                $q("#DisclosureAcceptanceSectionDiv").style.display = "none";
+                $q("#JointOwnerTitleSpan").textContent = _selectedAccountType.name;
+                $("#JointOwnersSectionDiv").show("slide", { direction: direction }, _sliderTimer);
+            };  
+
+            // return to the Joint Owners Section of the wizard in the view
+            var _returnToJointOwnersSection = function (direction) {
+                if (!_allowAddJointOwners) {
+                    AccountOpeningJointOwnerModule.showAccountSelectionSection();
+                    return;
+                }
+
+                $q("#MainAccountButtonContainerDiv").style.display = "none";
+                $q("#AddNewJointOwnersSectionDiv").style.display = "none";
+                $q("#DisclosureAcceptanceSectionDiv").style.display = "none";
+                $q("#FundingAccountSectionDiv").style.display = "none";
+                $q("#JointOwnerTitleSpan").textContent = _selectedAccountType.name;
+                $("#JointOwnersSectionDiv").show("slide", { direction: direction }, _sliderTimer);
+            };   
+
+            // slide open the Joint Owners Section of the wizard in the view from the 'Add Joint Owner' Form. this occurs from the Add Joint Owner form's 'cancel' button
+            var _slideOpenJointOwnersSection = function () {
+                $q("#MainAccountButtonContainerDiv").style.display = "none";
+                $q("#DisclosureAcceptanceSectionDiv").style.display = "none";
+                $q("#JointOwnerTitleSpan").textContent = _selectedAccountType.name;
+                $("#AddNewJointOwnersSectionDiv").slideUp("fast");
+                setTimeout(function () { $("#JointOwnersSectionDiv").show("blind", {}, (_sliderTimer - 100)) }, 310);;
+            };    
+
+            // Set the joint owners that were selected by the user
+            var _setJointOwners = function () {
+                var joForm = $q("#JointOwnerListForm");  
+                _jointOwnersList = []; // reset in case user when backwards
+
+                if (joForm && _allowAddJointOwners) {
+                    // if there is a JointOwnerListForm form (there isn't if there are no joint owners found) then
+                    // build joint owner list for submit based on the checked off Joint Owners from Wizard. Signature: OnlineBanking2.Models.AccountOpening.JointOwnerUiModel.cs
+                    // the joint owner list is then used during the 'finalize' call
+                    var checkedBoxes = joForm.querySelectorAll('input[type=checkbox]:checked');
+                    
+                    for (var i = 0; i < checkedBoxes.length; i++) {
+                        var jo = { Id: checkedBoxes[i].dataset.id, Name: checkedBoxes[i].dataset.name, AllowAccountAccess: true };
+                        _jointOwnersList.push(jo);
+                    }
+                };     
+
+                AccountOpeningJointOwnerModule.showDisclosureSection();
+                $("#JointOwnersNextButtonSpinnerSpan").slideUp();
+                $("#JointOwnersListNextButton").prop("disabled", false);
+                $("#JointOwnersListNextButton").prop("value", "@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NextButtonLabel")");
+            };
+
+            // Show the disclosure section of the wizard in the view.
+            var _showDisclosureSection = function () {
+                if (!_forceNewAccountOpeningDisclosure) {
+                    AccountOpeningJointOwnerModule.showFundingAccountSection();
+                    return;
+                }
+
+                $q("#MainAccountButtonContainerDiv").style.display = "none";
+                $q("#JointOwnersSectionDiv").style.display = "none";
+                $q("#AddNewJointOwnersSectionDiv").style.display = "none";
+                $q("#DisclosureAcceptanceTitleSpan").textContent = _selectedAccountType.name;
+                $("#DisclosureAcceptanceSectionDiv").show("slide", { direction: "right" }, _sliderTimer);
+            };
+
+            // the Add a New Joint Owner button was clicked. Show the add new form.
+            var _showAddNewJointOwnerSection = function () {
+                $("#AddNewJointOwnerSubmitButton").prop("disabled", false);
+                $("#JointOwnersSectionDiv").hide("blind", {}, _sliderTimer);
+                $q("#AddJointOwnerTitleSpan").textContent = _selectedAccountType.name;
+                setTimeout(function () { $("#AddNewJointOwnersSectionDiv").slideDown() }, 410);
+            };
+
+
+            // WIZARD ADD NEW JOINT OWNER:
+            // validate Add New Joint Owner form to enable the 'next' button
+            var _validateAddJointOwnerForm = function () {
+                var formBlob = $q("#AddJointOwnerForm");
+                var addJointOwnerFormValid = true;
+                var addJointOwnerFormTextRegx = /^[A-Za-z\d\-_.,!"'?#\s]+$/;
+                var addJointOwnerFormEmailRegx = /^(([^<>()\[\]\\.,;:\s@@"]+(\.[^<>()\[\]\\.,;:\s@@"]+)*)|(".+"))@@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+                var addJointOwnerFormSocialRegx = /^[0-9]{3}\-?[0-9]{2}\-?[0-9]{4}$/;
+                var addJointOwnerFormZipRegx = /^\d{5}$/;
+                var addJointOwnerFormPhoneRegx = /^\d{3}\-\d{3}\-\d{4}$/;
+
+                $("#AddNewJointOwnerSubmitButton").prop("disabled", true);
+                $("#AddJointOwnerValidationDiv").empty();
+                $("#AddJointOwnerValidationDiv").html('@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationNotification")');  // Please correct the following errors: 
+
+                // first name 
+                if (formBlob.FirstName.value === "") { // required
+                    $q("#FirstNameTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationFirstName")'); // Please enter a first name
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormTextRegx.test(formBlob.FirstName.value)) {
+                    $q("#FirstNameTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidFirstName")'); // Please enter a valid first name
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#FirstNameTextbox").style.outline = "none";
+                };
+
+                // last name 
+                if (formBlob.LastName.value === "") { // required
+                    $q("#LastNameTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationLastName")'); // Please enter your last name
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormTextRegx.test(formBlob.LastName.value)) {
+                    $q("#FirstNameTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidLastName")'); // Please enter a valid last name
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#LastNameTextbox").style.outline = "none";
+                };
+
+                // date of birth 
+                if (formBlob.DateOfBirth.value === "") { // required
+                    $q("#DateOfBirthTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationDateOfBirth")'); // Please enter your date of birth"
+                    addJointOwnerFormValid = false;
+                    // Date parse
+                } else if (!Date.parse(formBlob.DateOfBirth.value)) {
+                    $q("#DateOfBirthTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidDateOfBirth")'); // Please enter a valid date of birth
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#DateOfBirthTextbox").style.outline = "none";
+                };
+
+                // social security number
+                if (formBlob.SocialSecurityNumber.value === "") { // required
+                    $q("#SocialSecurityNumberTextbox").parentNode.style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationSocialSecurityNumber")'); // Please enter your social security number
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormSocialRegx.test(formBlob.SocialSecurityNumber.value)) {
+                    $q("#SocialSecurityNumberTextbox").parentNode.style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidSocialSecurityNumber")'); // Please enter a valid social security number. xxxxxxxxx or xxx-xx-xxxx format. No spaces.                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#SocialSecurityNumberTextbox").parentNode.style.outline = "none";
+                };
+
+                // address one
+                if (formBlob.AddressOne.value === "") { // required
+                    $q("#AddressOneTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationAddressOne")'); // Please enter your address
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormTextRegx.test(formBlob.AddressOne.value)) {
+                    $q("#AddressOneTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidAddressOne")'); // Please enter a valid address
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#AddressOneTextbox").style.outline = "none";
+                };
+
+                // city
+                if (formBlob.City.value === "") { // required
+                    $q("#CityTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationCity")'); // Please enter your city
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormTextRegx.test(formBlob.City.value)) {
+                    $q("#CityTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidCity")'); // Please enter a valid city
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#CityTextbox").style.outline = "none";
+                };
+
+                // state
+                if (formBlob.State.value === "none") { // required
+                    $q("#StateSelect").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationState")'); // Please enter your state
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#StateSelect").style.outline = "none";
+                };
+
+                // zip
+                if (formBlob.ZipCode.value === "") { // required
+                    $q("#ZipCodeTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationZip")'); // Please enter your zip code
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormZipRegx.test(formBlob.ZipCode.value)) {
+                    $q("#ZipCodeTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidZip")'); // Please enter a valid zip code
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#ZipCodeTextbox").style.outline = "none";
+                };
+
+                // email
+                if (formBlob.EmailAddress.value === "") { // required
+                    $q("#EmailAddressTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationEmailAddress")'); // Please enter your E-mail address
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormEmailRegx.test(formBlob.EmailAddress.value)) {
+                    $q("#EmailAddressTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidEmailAddress")'); // Please enter a valid E-mail address
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#EmailAddressTextbox").style.outline = "none";
+                };
+
+                // phone number
+                if (formBlob.Phone.value === "") { // required
+                    $q("#PhoneTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationPhone")'); // Please enter your phone number
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormPhoneRegx.test(formBlob.Phone.value)) {
+                    $q("#PhoneTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidPhone")'); // Please enter a valid phone number
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#PhoneTextbox").style.outline = "none";
+                };
+
+                // citizenship
+                if (formBlob.Citizenship.value === "") { // required
+                    $q("#CitizenshipTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationCitizenship")'); // Please enter Citizenship
+                    addJointOwnerFormValid = false;
+                    // Regex test
+                } else if (!addJointOwnerFormTextRegx.test(formBlob.Citizenship.value)) {
+                    $q("#CitizenshipTextbox").style.outline = "1px solid red";
+                    $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidCitizenship")'); // Please enter a valid Citizenship
+                    addJointOwnerFormValid = false;
+                } else {
+                    $q("#CitizenshipTextbox").style.outline = "none";
+                }; 
+
+                // Id card (driver's licence or Id) info (if required)
+                if (_requireIdInfoOnAddJointOwner) {
+                    // id number
+                    if (formBlob.IdNumber.value === "") { // required
+                        $q("#IdNumberTextbox").parentNode.style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationIdNumber")'); // Please enter your id number
+                        addJointOwnerFormValid = false;
+                        // Regex test
+                    } else if (!addJointOwnerFormTextRegx.test(formBlob.IdNumber.value)) {
+                        $q("#IdNumberTextbox").parentNode.style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidIdNumber")'); // Please enter a valid id number
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#IdNumberTextbox").parentNode.style.outline = "none";
+                    };
+
+                    // id state
+                    if (formBlob.IdState.value === "none") { // required
+                        $q("#IdStateSelect").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationIdState")'); // Please select your id's state
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#IdStateSelect").style.outline = "none";
+                        };
+
+                    // file upload
+                    if (formBlob.FileUpload.value === "") {
+                        $q("#CustomFileUploadLabel").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationFileUpload")'); // Please upload your id image
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#CustomFileUploadLabel").style.outline = "none";
+                    }
+
+                    // Issue Date
+                    if (formBlob.IdIssueDate.value === "") { // required
+                        $q("#IdIssueDateTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationIdIssueDate")'); // Please enter id issue date
+                        addJointOwnerFormValid = false;
+                        // Date parse
+                    } else if (!Date.parse(formBlob.IdIssueDate.value)) {
+                        $q("#IdIssueDateTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidIdIssueDate")'); // Please enter a valid id issue date
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#IdIssueDateTextbox").style.outline = "none";
+                    };
+
+                    // Expire Date
+                    if (formBlob.IdExpireDate.value === "") { // required
+                        $q("#IdExpireDateTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationIdExpireDate")'); // Please enter id expire date
+                        addJointOwnerFormValid = false;
+                        // Date parse
+                    } else if (!Date.parse(formBlob.IdExpireDate.value)) {
+                        $q("#IdExpireDateTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidIdExpireDate")'); // Please enter a valid id expire date
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#IdExpireDateTextbox").style.outline = "none";
+                    };
+                } // end id info validation
+
+                // employer info (if required)
+                if (_requireEmployerInfoOnAddJointOwner) {
+                    // Job Title
+                    if (formBlob.JobTitle.value === "") { // required
+                        $q("#JobTitleTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationJobTitle")'); // Please enter a job title
+                        addJointOwnerFormValid = false;
+                        // Regex test
+                    } else if (!addJointOwnerFormTextRegx.test(formBlob.JobTitle.value)) {
+                        $q("#JobTitleTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidJobTitle")'); // Please enter a valid job title
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#JobTitleTextbox").style.outline = "none";
+                    };
+
+                    // Employer name 
+                    if (formBlob.EmployerName.value === "") { // required
+                        $q("#EmployerNameTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationEmployerName")'); // Please enter an employer name
+                        addJointOwnerFormValid = false;
+                        // Regex test
+                    } else if (!addJointOwnerFormTextRegx.test(formBlob.EmployerName.value)) {
+                        $q("#EmployerNameTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidEmployerName")'); // Please enter a valid employer name
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#EmployerNameTextbox").style.outline = "none";
+                    };
+
+                    // Employer address one
+                    if (formBlob.EmployerAddressOne.value === "") { // required
+                        $q("#EmployerAddressOneTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationEmployerAddressOne")'); // Please enter employer address
+                        addJointOwnerFormValid = false;
+                        // Regex test
+                    } else if (!addJointOwnerFormTextRegx.test(formBlob.EmployerAddressOne.value)) {
+                        $q("#EmployerAddressOneTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidEmployerAddressOne")'); // Please enter a valid employer address
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#EmployerAddressOneTextbox").style.outline = "none";
+                    };
+
+                    // Employer city
+                    if (formBlob.EmployerCity.value === "") { // required
+                        $q("#EmployerCityTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationEmployerCity")'); // Please enter employer city
+                        addJointOwnerFormValid = false;
+                        // Regex test
+                    } else if (!addJointOwnerFormTextRegx.test(formBlob.EmployerCity.value)) {
+                        $q("#EmployerCityTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidEmployerCity")'); // Please enter a valid employer city
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#EmployerCityTextbox").style.outline = "none";
+                    };
+
+                    // Employer state
+                    if (formBlob.EmployerState.value === "none") { // required
+                        $q("#EmployerStateSelect").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationEmployerState")'); // Please select employer state
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#EmployerStateSelect").style.outline = "none";
+                    };
+
+                    // Employer zip
+                    if (formBlob.EmployerZipCode.value === "") { // required
+                        $q("#EmployerZipCodeTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationEmployerZip")'); // Please enter employer zip code
+                        addJointOwnerFormValid = false;
+                        // Regex test
+                    } else if (!addJointOwnerFormZipRegx.test(formBlob.EmployerZipCode.value)) {
+                        $q("#EmployerZipCodeTextbox").style.outline = "1px solid red";
+                        $("#AddJointOwnerValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidEmployerZip")'); // Please enter a valid employer zip code
+                        addJointOwnerFormValid = false;
+                    } else {
+                        $q("#EmployerZipCodeTextbox").style.outline = "none";
+                    };
+                } // end employer info validation
+
+                //
+                //
+                // check for anything that may have failed above
+                if (addJointOwnerFormValid === false) {
+                    $("#AddJointOwnerValidationDiv").slideDown();
+                    $("#AddJointOwnerValidationDiv").focus();
+                    $("#AddNewJointOwnerSubmitButton").prop("disabled", false);
+                    return false;
+                };
+
+                // form is valid. Submit it.
+                if (addJointOwnerFormValid) {
+                    $("#AddJointOwnerValidationDiv").hide();
+                    AccountOpeningJointOwnerModule.submitAddJointOwnerForm();
+                };
+            };
+
+            // submit AddJointOwnerForm - using xhr because this is a multi-part form with a file upload component
+            var _submitAddJointOwnerForm = function () {
+                // show disclosure
+                if (_forceAddNewJointOwnerDisclosure && !_addJointOwnerDisclosureAccepted) {
+                    $("#AddNewJointOwnerDisclosureModal").modal();
+                    return;
+                }; 
+
+                var inDelay = setTimeout(function () { $("#AddJointOwnerSpinnerDiv").slideDown(); }, 300);
+                var formBlob = $q("#AddJointOwnerForm");
+
+                var xhr = new XMLHttpRequest();
+                xhr.overrideMimeType("application/json");            
+                xhr.open("Post", '@Url.Action("AddNewJointOwner", "AccountOpening")');
+                xhr.responseType = "json";  // must be after the .open method
+
+                xhr.onreadystatechange = function () {
+                    var success = false;
+                    var isMember = false;
+
+                    if (xhr.readyState == 4 && xhr.status == 200) {
+                        if (xhr.response && typeof xhr.response === "object") {
+                            success = xhr.response.Id ? true : false;   // if no Id, then the add joint owner call failed
+                            isMember = xhr.response.IsMember;
+                        } else if (xhr.response) {    // ie and older browsers
+                            var jsonResponse = JSON.parse(xhr.response);
+                            success = jsonResponse.Id? true : false;
+                            isMember = jsonResponse.IsMember;
+                        }
+
+                        if (success && !isMember) { // new jo is NOT a member of this credit union   
+                            $("#AddJointOwnerSpinnerDiv").slideUp();
+                            clearTimeout(inDelay);
+                            $("#NewJointOwnerNotMemberWarningModal").modal();
+                        } else if (success) {
+                            $("#AddJointOwnerSpinnerDiv").slideUp();
+                            clearTimeout(inDelay);
+                            AccountOpeningJointOwnerModule.refetchJointOwnerList();
+                            $q("#AddJointOwnerForm").reset();
+                        } else {
+                            $("#AddJointOwnerErrorDiv").slideDown();
+                            $("#AddJointOwnerSpinnerDiv").slideUp();
+                            clearTimeout(inDelay);
+                        }
+                    } else if (xhr.readyState == 4 && !success) {
+                        $("#AddJointOwnerErrorDiv").slideDown();
+                        $("#AddJointOwnerSpinnerDiv").slideUp();
+                        clearTimeout(inDelay);
+                    }
+                };
+                xhr.send(new FormData(formBlob));
+            };
+
+            // reset the form:
+            var _resetAddJointOwnerForm = function () {
+                $q("#AddJointOwnerForm").reset();
+                $("#AddJointOwnerValidationDiv").empty();
+                $("#AddJointOwnerValidationDiv").slideUp();
+                $("#AddJointOwnerErrorDiv").slideUp();
+                $q("#FirstNameTextbox").style.outline = "none";
+                $q("#LastNameTextbox").style.outline = "none";
+                $q("#DateOfBirthTextbox").style.outline = "none";
+                $q("#SocialSecurityNumberTextbox").parentNode.style.outline = "none";
+                $q("#IdNumberTextbox").parentNode.style.outline = "none";
+                $q("#IdStateSelect").style.outline = "none";
+                $q("#AddressOneTextbox").style.outline = "none";
+                $q("#CityTextbox").style.outline = "none";
+                $q("#StateSelect").style.outline = "none";
+                $q("#ZipCodeTextbox").style.outline = "none";
+                $q("#EmailAddressTextbox").style.outline = "none";
+                $q("#PhoneTextbox").style.outline = "none";
+                $q("#CitizenshipTextbox").style.outline = "none";
+                $q("#CustomFileUploadLabel").style.outline = "none";
+                $q("#IdIssueDateTextbox").style.outline = "none";
+                $q("#IdExpireDateTextbox").style.outline = "none";
+                $q("#JobTitleTextbox").style.outline = "none";
+                $q("#EmployerNameTextbox").style.outline = "none";
+                $q("#EmployerAddressOneTextbox").style.outline = "none";
+                $q("#EmployerCityTextbox").style.outline = "none";
+                $q("#EmployerStateSelect").style.outline = "none";
+                $q("#EmployerZipCodeTextbox").style.outline = "none";
+                $q("#FileUploadFilenameSpan").textContent = "";
+                $("#AddNewJointOwnerSubmitButton").prop("disabled", false);
+            };
+
+            // refetch the Joint Owners if a new one was just successfully added:
+            var _refetchJointOwnerList = function () {
+                // show add joint owners checkbox section:
+                AccountOpeningJointOwnerModule.slideOpenJointOwnersSection();
+                $("#JointOwnerSpinnerDiv").slideDown();
+                $q("#JointOwnerListDiv").style.opacity = "0.4";
+
+                $.ajax({
+                    url: '@Url.Action("RefetchJointOwnersList", "AccountOpening")', // action, controller
+                    dataType: "text",
+                    type: "Get",
+                    success: function (data) {
+                        if (data.toLocaleLowerCase() === "failure") {
+                             // TODO: Handle failure
+                        } else if (data) {
+                            $q("#JointOwnerListDiv").innerHTML = "";
+                            $q("#JointOwnerListDiv").innerHTML = data;    // place partial view that was returned from the controller in here (_JointOwersListRepeater.cshtml) 
+                            $q("#JointOwnerListDiv").style.opacity = "1";
+                            $("#JointOwnerSpinnerDiv").slideUp();
+                        };
+                    },
+                    error: function (xhr, err) {
+                        var terseError = xhr.statusText;
+                        console.log("terseError: ", terseError);
+                        console.log("Request Failed: " + err);
+                        $("#AddJointOwnerErrorDiv").slideDown();
+                    }
+                });
+            };
+
+
+            // WIZARD STEP THREE - DISCLOSURE
+            // go to the Account Funding section
+            var _showFundingAccountSection = function () {
+                if (!_allowNewAccountFunding) {
+                    AccountOpeningJointOwnerModule.showReviewSection();
+                    return;
+                };
+
+                $q("#AddNewJointOwnersSectionDiv").style.display = "none";
+                $q("#JointOwnersSectionDiv").style.display = "none";
+                $q("#DisclosureAcceptanceSectionDiv").style.display = "none";
+                $q("#FundingAccountTitleSpan").textContent = _selectedAccountType.name;
+                $("#FundingAccountSectionDiv").show("slide", { direction: "right" }, _sliderTimer);
+            };
+
+            // WIZARD STEP FOUR - FUNDING ACCOUNT
+            // go back to the disclosure section
+            var _returnToDisclosureSection = function () {
+                if (!_forceNewAccountOpeningDisclosure) {
+                    AccountOpeningJointOwnerModule.returnToJointOwnersSection("left");
+                    return;
+                }
+
+                $q("#FundingAccountSectionDiv").style.display = "none";
+                $q("#ReviewSectionDiv").style.display = "none";
+                $("#DisclosureAcceptanceNextButton").prop("disabled", true);
+                $("#AcknowledgeCheckbox").prop("checked", false);
+                $("#DisclosureAcceptanceSectionDiv").show("slide", { direction: "left" }, _sliderTimer);
+            };
+
+            // validate the Account Funding Form
+            var _validateFundingAccountForm = function () {
+                // validate entries first:
+                var formBlob = $q("#FundingAccountForm");
+                var fundingAccountFormValid = true;
+
+                $("#FundingAccountValidationDiv").empty();
+                $("#FundingAccountValidationDiv").html('@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationNotification")');  // Please correct the following errors: 
+
+                // funding account drop-down select
+                if (formBlob.FundingAccountId.value === "none") { // required
+                    $q("#FundingAccountSelect").style.outline = "1px solid red";
+                    $("#FundingAccountValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationFundingAccount")'); // Please select a funding account
+                    fundingAccountFormValid = false;
+                } else {
+                    $q("#FundingAccountSelect").style.outline = "none";
+                };
+
+                // funding amount textbox
+                if (formBlob.FundingAmountInDollars.value === "" || formBlob.FundingAmountInDollars.value === "0") { // required
+                    $q("#FundingAmountTextBox").parentNode.style.outline = "1px solid red";
+                    $("#FundingAccountValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationFundingAmount")'); // Please enter an amount
+                    fundingAccountFormValid = false;
+                    // number test
+                } else if (isNaN(formBlob.FundingAmountInDollars.value)) {
+                    $q("#FundingAmountTextBox").parentNode.style.outline = "1px solid red";
+                    $("#FundingAccountValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidFundingAmount")'); // Please enter a valid amount (whole numbers only, please)
+                    fundingAccountFormValid = false;
+                    // Range test  
+                } else if ((_selectedAccountType.min != "" && parseInt(formBlob.FundingAmountInDollars.value) < parseInt(_selectedAccountType.min.replace(/,/g, ''))) ||
+                    (_selectedAccountType.max != "" && parseInt(formBlob.FundingAmountInDollars.value) > parseInt(_selectedAccountType.max.replace(/,/g, '')))) {
+                    $q("#FundingAmountTextBox").parentNode.style.outline = "1px solid red";
+                    $("#FundingAccountValidationDiv").append("<br>&bull; " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "ValidationValidRangeFundingAmount")'); // Please enter a valid amount (number is out of allowable minimum and maximum ranges)
+                    $("#FundingAccountValidationDiv").append("<br>&bull; Minimum: $" + _selectedAccountType.min + ". Maximum: $" + _selectedAccountType.max);
+                    fundingAccountFormValid = false;
+                } else {
+                    $q("#FundingAmountTextBox").parentNode.style.outline = "none";
+                };
+
+                // check for anything that may have failed above
+                if (fundingAccountFormValid === false) {
+                    $("#FundingAccountValidationDiv").slideDown();
+                    $("#FundingAccountValidationDiv").focus();
+                    return false;
+                };
+
+                // form is valid. clear any validation:
+                $("#FundingAccountValidationDiv").slideUp();
+                $q("#FundingAccountSelect").style.outline = "none";
+                $q("#FundingAmountTextBox").parentNode.style.outline = "none";
+
+                // form is valid. Go to Review Section and populate the span placeholders there (Note, there is no longer a need to send this to ADAPI as a separate call):
+                AccountOpeningJointOwnerModule.showReviewSection();
+            };
+            
+
+            // go to the review section
+            var _showReviewSection = function () {
+                var fundingForm = $q("#FundingAccountForm");
+                $q("#ReviewSuccessDiv").style.display = "none";
+                $q("#ReviewErrorDiv").style.display = "none";
+                $q("#FundingAccountSectionDiv").style.display = "none";
+                $q("#DisclosureAcceptanceSectionDiv").style.display = "none";
+                $q("#ReviewTitleSpan").textContent = _selectedAccountType.name;
+                $q("#ReviewAccountSpan").textContent = _selectedAccountType.name;
+
+                // min and max stuff
+                if (_selectedAccountType.min != "") {
+                    $q("#ReviewAccountSpan").textContent += " - " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "MinimumDepositLabel")' + " $" + _selectedAccountType.min;
+                }
+
+                if (_selectedAccountType.max != "") {
+                    $q("#ReviewAccountSpan").textContent += ". " + '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "MaximumDepositLabel")' + " $" + _selectedAccountType.max;
+                }
+
+                $q("#ReviewFundingAccountSpan").textContent = fundingForm.FundingAccountId.options[fundingForm.FundingAccountId.selectedIndex].text;
+                $q("#ReviewFundingAmountSpan").textContent = "$" + fundingForm.FundingAmountInDollars.value + ".00";
+
+                if (_allowPromoCode && fundingForm.PromoCode) {
+                    $q("#ReviewPromoCodeSpan").textContent = fundingForm.PromoCode.value.length > 0 ? fundingForm.PromoCode.value : "None entered";
+                }
+
+                AccountOpeningJointOwnerModule.buildJointOwnerRepeaterForReview();
+
+                if (_selectedAccountType.hasdebitcard) {
+                    AccountOpeningJointOwnerModule.buildDebitCardForm();
+                }
+
+                if (!_allowNewAccountFunding) {
+                    $q("#ReviewFundingAccountDiv").style.display = "none";
+                };
+
+                if (!_allowPromoCode) {
+                    $q("#ReviewPromoCodeDiv").style.display = "none";
+                }
+
+                $("#ReviewSectionDiv").show("slide", { direction: "right" }, _sliderTimer);
+            };
+
+            // WIZARD STEP FIVE - REVIEW
+            // go back to the funding account section
+            var _returnToFundingAccountSection = function () {
+                if (!_allowNewAccountFunding) {
+                    AccountOpeningJointOwnerModule.returnToDisclosureSection();
+                    return;
+                };
+
+                $q("#ReviewSectionDiv").style.display = "none";
+                $("#FundingAccountSectionDiv").show("slide", { direction: "left" }, _sliderTimer);
+            };
+
+            // build Joint Owner list for review page
+            var _buildJointOwnerRepeaterForReview = function () {
+                var checkedBoxes = [];
+                $q("#ReviewJointOwnersSpan").innerHTML = "";
+                var joForm = $q("#JointOwnerListForm");
+
+                if (joForm) {
+                    checkedBoxes = joForm.querySelectorAll('input[type=checkbox]:checked');
+                }
+
+                if (!_allowAddJointOwners) {
+                    $q("#ReviewJointOwnersSpan").innerHTML = '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "JointOwnersNotAllowedLabel")'; // Joint Owners not allowed
+                } else if (_allowAddJointOwners && checkedBoxes.length > 0) {
+                    for (var i = 0; i < checkedBoxes.length; i++) {
+                        $q("#ReviewJointOwnersSpan").innerHTML += checkedBoxes[i].dataset.name + "<br />";
+                    }
+                } else {
+                    $q("#ReviewJointOwnersSpan").innerHTML = '@ResourceHelper.GetText("AccountOpening/AccountOpening.cshtml", "NoJointOwnersSelectedLabel")'; // No Joint Owners were selected
+                };
+            };
+
+            // build debit card form from chosen Joint Owners
+            var _buildDebitCardForm = function () {
+                var checkedBoxes = [];
+                $q("#DebitCardRepeaterDiv").innerHTML = "";
+                var joForm = $q("#JointOwnerListForm");
+
+                if (joForm) {
+                    checkedBoxes = joForm.querySelectorAll('input[type=checkbox]:checked');
+                }
+
+                if (_allowAddJointOwners && _selectedAccountType.hasdebitcard && checkedBoxes.length > 0) {
+                    $q("#DebitCardsDiv").style.display = "block";
+                    var dynForm = document.createElement('form');
+                    dynForm.setAttribute("id", "DebitCardsDynamicForm");
+                    $q("#DebitCardRepeaterDiv").appendChild(dynForm);
+
+                    for (var i = 0; i < checkedBoxes.length; i++) {
+                        var div = document.createElement("div");
+                        var cb = document.createElement("input");
+                        var label = document.createElement("label");
+                        cb.setAttribute("type", "checkbox");
+                        cb.setAttribute("id", "cb_" + checkedBoxes[i].dataset.id);
+                        cb.setAttribute("data-id", checkedBoxes[i].dataset.id);
+                        cb.setAttribute("data-name", checkedBoxes[i].dataset.name);
+                        label.textContent = checkedBoxes[i].dataset.name;
+                        label.setAttribute("for", "cb_" + checkedBoxes[i].dataset.id);
+                        label.setAttribute("style", "margin-left:8px;");
+                        div.appendChild(cb);
+                        div.appendChild(label);
+
+                        dynForm.appendChild(div);
+                    }
+                } else {
+                    $q("#DebitCardsDiv").style.display = "none";
+                };
+            };
+
+            // open the account
+            var _openAccount = function () {
+                var dcForm = $q("#DebitCardsDynamicForm");
+                var fundingForm = $q("#FundingAccountForm");
+                var inDelay;
+
+                // warn with modal if no debit cards selected:
+                if (dcForm && _warnUserIfNoDebitCardSelected && _selectedAccountType.hasdebitcard && !_noDebitCardsOk) {
+                    var checkedBoxesDc = dcForm.querySelectorAll('input[type=checkbox]:checked');
+
+                    if (checkedBoxesDc.length === 0) {
+                        $("#NoDebitCardsWarningModal").modal();
+                        return;
+                    };                  
+                }; 
+
+                // warn with modal if user is a minor and no debit cards selected:
+                if (dcForm && _userIsMinor && _selectedAccountType.hasdebitcard) {
+                    var checkedBoxesDc = dcForm.querySelectorAll('input[type=checkbox]:checked');
+
+                    if (checkedBoxesDc.length === 0) {
+                        $("#NoDebitCardsWarningModal").modal();
+                        return;
+                    };
+                };      
+
+                inDelay = setTimeout(function () { $("#ReviewSpinnerDiv").slideDown() }, 300);
+                $("#ReviewSubmitButton").prop("disabled", true);
+                $("#ReviewBackButton").prop("disabled", true);
+
+                if (dcForm && _allowAddJointOwners) {
+                    // build debit card recipients in the _jointOwnersList for submit based on the checked off debit card recipients from Wizard Step 5 (Review). Signature: Psi.Data.Models.Domain.AccountOpening.AccountOpeningJointOwner.cs
+                    if (_selectedAccountType.hasdebitcard) {    // only if debit cards are allowed for this type of account product
+                        var checkedBoxesDc = dcForm.querySelectorAll('input[type=checkbox]:checked');
+
+                        for (var j = 0; j < checkedBoxesDc.length; j++) {
+                            // assign the joint owner a debit card if in this list
+                            for (var k = 0; k < _jointOwnersList.length; k++) {
+                                if (_jointOwnersList[k].Id === checkedBoxesDc[j].dataset.id) {
+                                    _jointOwnersList[k].ShouldSendDebitCard = true;
+                                }
+                            }
+                        }
+                    };
+                };     
+
+                // buid up the final form data. Model Signature: OnlineBanking2.Models.AccountOpening.NewAccountSubmitModel.cs
+                var postData = {
+                    JointOwnersList: _jointOwnersList,
+                    PromoCode: _allowPromoCode && fundingForm.PromoCode ? fundingForm.PromoCode.value : "",
+                    FundingAccountId: _allowNewAccountFunding ? fundingForm.FundingAccountId.value : "",
+                    FundingAmountInDollars: _allowNewAccountFunding ? parseInt(fundingForm.FundingAmountInDollars.value) : 0
+                };
+
+                $.ajax({
+                    url: '@Url.Action("OpenNewAccount", "AccountOpening")', // action, controller
+                    dataType: "text",
+                    type: "Post",
+                    data: _addAntiForgeryToken(postData),
+                    statusCode: {
+                        200: function () {
+                            $("#ReviewSuccessDiv").slideDown();
+                            $("#ReviewSpinnerDiv").slideUp();
+                            clearTimeout(inDelay);
+                        },
+                        400: function () {
+                            $("#ReviewErrorDiv").slideDown();
+                            $("#ReviewSubmitButton").prop("disabled", false);
+                            $("#ReviewBackButton").prop("disabled", false);
+                            $("#ReviewSpinnerDiv").slideUp();
+                            clearTimeout(inDelay);
+                        }
+                    },
+                    error: function (xhr, err) {
+                        var terseError = xhr.statusText;
+                        console.log("terseError: ", terseError);
+                        console.log("Request Failed: " + err);
+                        $("#ReviewSpinnerDiv").slideUp();
+                        clearTimeout(inDelay);
+                        $("#ReviewErrorDiv").slideDown();
+                    }
+                });
+            };
+
+            // misc methods:
+            //
+            // add anti-forgery token
+            var _addAntiForgeryToken = function (data) {
+                data.__RequestVerificationToken = $('#__AjaxAntiForgeryForm input[name=__RequestVerificationToken]').val();
+                return data;
+            };
+
+            // Check the file while the user is choosing the upload file before form submit:
+            var _checkFileUpload = function () {
+                // Check the file size:
+                if (this.files[0].size >= 4194304) {   // 4MB -> 4 * 1024 * 1024
+                    alert('File is to large for uploading.\n\nThis file size is: ' + this.files[0].size / 1024 / 1024 + " MB.");
+                    this.value = "";
+                    return;
+                };
+
+                // Check the file extention:
+                if ($("#UploadFileTypesHidden").val().length > 0) {
+                    if (this.files[0] != undefined) {
+                        var fileExt = this.files[0].name.split('.').pop();
+
+                        if ($("#UploadFileTypesHidden").val().indexOf(fileExt) == -1) {
+                            this.value = "";
+                            alert('File is not the right type.\n\nOnly files of this type are allowed: \n\n' + $("#UploadFileTypesHidden").val() + ".");
+                            return;
+                        }
+                    }
+                };
+
+                // set the text next to the file upload:
+                if (this.files[0]) {
+                    $("#FileUploadFilenameSpan").text(this.files[0].name);
+                    $q("#CustomFileUploadLabel").style.outline = "none";
+                };
+            };
+
+            // toggle the next button on the disclosure view when the acknowledge checkbox is checked
+            var _toggleAcknowledgeChecked = function (checkbox) {
+                if (checkbox.checked) {
+                    $("#DisclosureAcceptanceNextButton").prop("disabled", false);
+                } else {
+                    $("#DisclosureAcceptanceNextButton").prop("disabled", true);
+                }
+            };
+
+            // only numbers are allowed in the funding amount textbox
+            var _ensureEntryIsOnlyNumerals = function (evt) {
+                var charCode = (evt.which) ? evt.which : event.keyCode
+                return (charCode >= 48 && charCode <= 57);
+            };
+
+            // set _noDebitCardsOk to true so that the user can submit even with no debit cards selected, but ONLY if not a minor.
+            var _allowNoDebitCards = function () {
+                if (!_userIsMinor) {
+                    _noDebitCardsOk = true;
+                }
+
+                $("#NoDebitCardsWarningModal").modal("hide");
+            };
+
+            // Add New Joint Owner disclosure 'Acknowledge' button was clicked... allow the form to submit
+            var _acknowledgeAddNewJointOwnerDisclosure = function () {
+                _addJointOwnerDisclosureAccepted = true;
+                $("#AddNewJointOwnerDisclosureModal").modal("hide");
+                AccountOpeningJointOwnerModule.submitAddJointOwnerForm();
+            }
+
+            // New Joint Owner Not a Member Warning Modal 'proceed' button was clicked... hide modal and return to wizard step 2
+            var _proceedFromJointOwnerNotMemberWarning = function () {
+                $("#NewJointOwnerNotMemberWarningModal").modal("hide");
+                $q("#AddJointOwnerForm").reset();
+                AccountOpeningJointOwnerModule.refetchJointOwnerList();
+                AccountOpeningJointOwnerModule.returnToJointOwnersSection("left");
+            }
+
+
+            // public api
+            //
+            //
+            return {
+                showProductAccountOptions: _showProductAccountOptions,
+                removeSelectedAccountTileStyle: _removeSelectedAccountTileStyle,
+                removeSelectedAccountTypeTileStyle: _removeSelectedAccountTypeTileStyle,
+                selectAccountTypeTile: _selectAccountTypeTile,
+                showAccountSelectionSection: _showAccountSelectionSection,
+                setAccountType: _setAccountType,
+                showJointOwnersSection: _showJointOwnersSection,
+                returnToJointOwnersSection: _returnToJointOwnersSection,
+                slideOpenJointOwnersSection: _slideOpenJointOwnersSection,
+                setJointOwners: _setJointOwners,
+                acknowledgeAddNewJointOwnerDisclosure: _acknowledgeAddNewJointOwnerDisclosure,
+                proceedFromJointOwnerNotMemberWarning: _proceedFromJointOwnerNotMemberWarning,
+                showDisclosureSection: _showDisclosureSection,
+                showAddNewJointOwnerSection: _showAddNewJointOwnerSection,
+                checkFileUpload: _checkFileUpload,
+                validateAddJointOwnerForm: _validateAddJointOwnerForm,
+                submitAddJointOwnerForm: _submitAddJointOwnerForm,
+                resetAddJointOwnerForm: _resetAddJointOwnerForm,
+                toggleAcknowledgeChecked: _toggleAcknowledgeChecked,
+                refetchJointOwnerList: _refetchJointOwnerList,
+                showFundingAccountSection: _showFundingAccountSection,
+                returnToDisclosureSection: _returnToDisclosureSection,
+                ensureEntryIsOnlyNumerals: _ensureEntryIsOnlyNumerals,
+                validateFundingAccountForm: _validateFundingAccountForm,
+                showReviewSection: _showReviewSection,
+                returnToFundingAccountSection: _returnToFundingAccountSection,
+                buildJointOwnerRepeaterForReview: _buildJointOwnerRepeaterForReview,
+                buildDebitCardForm: _buildDebitCardForm,
+                allowNoDebitCards: _allowNoDebitCards,
+                openAccount: _openAccount
+            }
+        }());
+    </script>
+}
+
